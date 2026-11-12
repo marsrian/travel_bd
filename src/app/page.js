@@ -1,69 +1,164 @@
-import Image from "next/image";
+
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAppSettings } from "@/components/ThemeLanguageProvider";
+
+import Hero from "@/components/Hero";
+import FeaturedPlaces from "@/components/FeaturedPlaces";
+import StatsBanner from "@/components/StatsBanner";
+import Districts from "@/components/Districts";
+import TravelGuide from "@/components/TravelGuide";
+import Events from "@/components/Events";
+import Newsletter from "@/components/Newsletter";
+import Footer from "@/components/Footer";
 
 export default function Home() {
+  const { language, settingsLoaded } = useAppSettings();
+
+  const [search, setSearch] = useState("");
+
+  const [homepageData, setHomepageData] = useState({
+    places: [],
+    districts: [],
+    events: [],
+    guides: [],
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const currentLanguage = settingsLoaded ? language : "en";
+
+  // Fetch homepage data
+  async function fetchHomepageData(signal) {
+  const response = await fetch("/api/homepage", {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+
+  const result = await response.json();
+
+  if (!result.success || !result.data) {
+    throw new Error("Invalid homepage API response.");
+  }
+
+  return {
+    places: Array.isArray(result.data.places) ? result.data.places : [],
+    districts: Array.isArray(result.data.districts)
+      ? result.data.districts
+      : [],
+    events: Array.isArray(result.data.events) ? result.data.events : [],
+    guides: Array.isArray(result.data.guides) ? result.data.guides : [],
+  };
+}
+
+  // Initial homepage data fetch
+  useEffect(() => {
+  const controller = new AbortController();
+
+  async function loadHomepage() {
+    try {
+      const data = await fetchHomepageData(controller.signal);
+
+      if (!controller.signal.aborted) {
+        setHomepageData(data);
+        setError("");
+      }
+    } catch (err) {
+      if (err.name === "AbortError" || controller.signal.aborted) return;
+
+      console.error("Homepage API error:", err);
+      setError("Unable to load homepage data. Please try again.");
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
+    }
+  }
+
+  loadHomepage();
+
+  return () => controller.abort();
+}, []);
+
+  // Retry homepage data fetch
+  async function handleRetry() {
+  const controller = new AbortController();
+
+  setLoading(true);
+  setError("");
+
+  try {
+    const data = await fetchHomepageData(controller.signal);
+
+    if (!controller.signal.aborted) {
+      setHomepageData(data);
+    }
+  } catch (err) {
+    if (err.name === "AbortError") return;
+
+    console.error("Homepage API error:", err);
+    setError("Unable to load homepage data. Please try again.");
+  } finally {
+    if (!controller.signal.aborted) {
+      setLoading(false);
+    }
+  }
+}
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main>
+      <div className="min-h-screen bg-[#f7faf8] text-slate-900 transition-colors dark:bg-slate-950 dark:text-white">
+        <Hero
+          language={currentLanguage}
+          search={search}
+          setSearch={setSearch}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.js
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+
+        <FeaturedPlaces
+          language={currentLanguage}
+          search={search}
+          places={homepageData.places}
+          loading={loading}
+          error={error}
+          onRetry={handleRetry}
+        />
+
+        <StatsBanner language={currentLanguage} />
+
+        <Districts
+          language={currentLanguage}
+          districts={homepageData.districts}
+        />
+
+        <div className="mx-auto grid max-w-[1400px] grid-cols-1 gap-8 px-5 py-8 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <TravelGuide
+              language={currentLanguage}
+              guides={homepageData.guides}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </div>
+
+          <div>
+            <Events
+              language={currentLanguage}
+              events={homepageData.events}
+            />
+          </div>
         </div>
-      </main>
-    </div>
+
+        <Newsletter language={currentLanguage} />
+
+        <Footer language={currentLanguage} />
+      </div>
+    </main>
   );
 }
